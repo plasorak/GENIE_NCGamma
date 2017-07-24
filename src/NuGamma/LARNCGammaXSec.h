@@ -25,12 +25,7 @@
 
 #include "TLorentzVector.h"
 #include "Base/XSecAlgorithmI.h"
-// #include "NuGamma/Tensor.h"
-// #include "NuGamma/TensorDim1.h"
-// #include "NuGamma/TensorDim2.h"
-// #include "NuGamma/TensorDim3.h"
-// #include "NuGamma/TensorDim4.h"
-// #include "NuGamma/TensorUtils.h"
+#include "NuGamma/TensorInc.h"
 
 namespace genie {
 
@@ -61,47 +56,62 @@ namespace genie {
     mutable TLorentzVector *gNeutrinoFinal;
     mutable TLorentzVector *gRemnantNucleon;
     mutable TLorentzVector *gPhotonFinal;
-  };
-}
-    /*
+
+    
     // Amplitude calculation
-    void AmpNum(double t1, double t2, utils::TensorDim2* c_lh_both);
-    // void AmpNum2(double t1, double t2, utils::TensorDim2* c_lh_both_p, utils::TensorDim2* c_lh_both_n, LARContainer *cont);
+    void AmpNum(double t1, double t2, TensorUtils::TensorOrder2& c_lh_both);
+    // void AmpNum2(double t1, double t2, TensorUtils::TensorOrder2& c_lh_both_p, TensorUtils::TensorOrder2& c_lh_both_n, LARContainer *cont);
 
     // Form factors
     void ElectroMagneticFormFactor(double t, int nucleon, double &f1,  double &f2);
     void NeutralCurrentFormFactor (double t, int nucleon, double &fv1, double &fv2, double &fva);
       
     void P33_1232FormFactor(double q2, double &c3v, double &c4v, double &c5v, double &c3a, double &c4a, double &c5a, double &c6a);
-    void P11_1440FormFactor(double t1, utils::TensorDim2* fem, utils::TensorDim2* fvem, utils::TensorDim2* fvnc, utils::TensorDim1* fanc);
-    void D13_1520FormFactor(double t1, utils::TensorDim2* fem, utils::TensorDim2* fvem, utils::TensorDim2* fvnc, utils::TensorDim2* fanc);
-    void P33_1232FormFactor(double t1, utils::TensorDim2* fem, utils::TensorDim2* fvem, utils::TensorDim2* fvnc, utils::TensorDim2* fanc);
-    void S11_1535FormFactor(double t1, utils::TensorDim2* fem, utils::TensorDim2* fvem, utils::TensorDim2* fvnc, utils::TensorDim1* fanc);
+    void P11_1440FormFactor(double t1, TensorUtils::TensorOrder2& fem, TensorUtils::TensorOrder2& fvem, TensorUtils::TensorOrder2& fvnc, TensorUtils::TensorOrder1& fanc);
+    void D13_1520FormFactor(double t1, TensorUtils::TensorOrder2& fem, TensorUtils::TensorOrder2& fvem, TensorUtils::TensorOrder2& fvnc, TensorUtils::TensorOrder2& fanc);
+    void P33_1232FormFactor(double t1, TensorUtils::TensorOrder2& fem, TensorUtils::TensorOrder2& fvem, TensorUtils::TensorOrder2& fvnc, TensorUtils::TensorOrder2& fanc);
+    void S11_1535FormFactor(double t1, TensorUtils::TensorOrder2& fem, TensorUtils::TensorOrder2& fvem, TensorUtils::TensorOrder2& fvnc, TensorUtils::TensorOrder1& fanc);
     
-    void HelicityAmplitude(std::string name, std::string wave, double q2, double &a12, double &a32, double &s12);
-    void EMtoNCFormFactor(double n, utils::TensorDim2*fvem, utils::TensorDim2* fvnc);
-    double DeltaPropagator(utils::TensorDim1 *am);
-    TComplex Propagator(int nexcit, utils::TensorDim1* sp);
+    void HelicityAmplitude(Resonance_t res, std::string wave, double q2, double &a12, double &a32, double &s12);
+    void EMtoNCFormFactor(double n, TensorUtils::TensorOrder2&fvem, TensorUtils::TensorOrder2& fvnc);
+    double DeltaPropagator(TensorUtils::TensorOrder1& am);
+    TComplex Propagator(int nexcit, TensorUtils::TensorOrder1& sp);
 
     // The "vertex" calculation
-    void VertexAB (double t1, double t2, utils::TensorDim4* ch_vertex1, utils::TensorDim4* ch_vertex2);
-    void VertexCD (double t1, double t2, utils::TensorDim4* ch_vertex1, utils::TensorDim4* ch_vertex2);
-    void VertexE  (utils::TensorDim4* c_lh_both);
+    void VertexAB (double t1, double t2, TensorUtils::TensorOrder4& ch_vertex1, TensorUtils::TensorOrder4& ch_vertex2);
+    void VertexCD (double t1, double t2, TensorUtils::TensorOrder4& ch_vertex1, TensorUtils::TensorOrder4& ch_vertex2);
+    void VertexE  (TensorUtils::TensorOrder4& c_lh_both);
 
-    void VertexJ12(double t1, utils::TensorDim4* ch_verj12, utils::TensorDim4* ch_verj12_t);
-    void VertexJ32(double t1, utils::TensorDim4* ch_verj32, utils::TensorDim4* ch_verj32_t);
-    void Vertex12 (double f1,  double f2, double fa, utils::TensorDim1* sq, utils::TensorDim3* ver12);
-    void Vertex32 (utils::TensorDim1* fcv, utils::TensorDim1* fca, utils::TensorDim1* sp, utils::TensorDim1* sq, utils::TensorDim4* cver32);
+    void VertexJ12(double t1, TensorUtils::TensorOrder4& ch_verj12, TensorUtils::TensorOrder4& ch_verj12_t);
+    void VertexJ32(double t1, TensorUtils::TensorOrder4& ch_verj32, TensorUtils::TensorOrder4& ch_verj32_t);
+    void Vertex12 (double f1,  double f2, double fa, TensorUtils::TensorOrder1& sq, TensorUtils::TensorOrder3& ver12);
+    void Vertex32 (TensorUtils::TensorOrder1& fcv, TensorUtils::TensorOrder1& fca, TensorUtils::TensorOrder1& sp, TensorUtils::TensorOrder1& sq, TensorUtils::TensorOrder4& cver32);
 
-    void TraceLight(utils::TensorDim2* c_tr_l, utils::TensorDim2* c_tr_l_anti);
-    double DeltaPi(utils::TensorDim1* sp);
-    void AEM(double t1, double t2, utils::TensorDim1* sp, utils::TensorDim1* sq, utils::TensorDim4* caem);
-    void ANC(double t1, double t2, utils::TensorDim1* sp, utils::TensorDim1* sq, utils::TensorDim4* canc);
-    TComplex cDdelta(utils::TensorDim1* spp);
+    void TraceLight(TensorUtils::TensorOrder2& c_tr_l, TensorUtils::TensorOrder2& c_tr_l_anti);
+    double DeltaPi(TensorUtils::TensorOrder1& sp);
+    void AEM(double t1, double t2, TensorUtils::TensorOrder1& sp, TensorUtils::TensorOrder1& sq, TensorUtils::TensorOrder4& caem);
+    void ANC(double t1, double t2, TensorUtils::TensorOrder1& sp, TensorUtils::TensorOrder1& sq, TensorUtils::TensorOrder4& canc);
+    TComplex cDdelta(TensorUtils::TensorOrder1& spp);
     TComplex Width(int nexcit, double sp2);
-    void FactorC(double t1, double t2, utils::TensorDim1* fcv, utils::TensorDim1* fcvt, utils::TensorDim1* fcat);
-    utils::TensorDim2* Lambda(int ns, int nd, utils::TensorDim1* ppd);
-    //double FMV(utils::TensorDim1* xp1, utils::TensorDim1* xp2);
+    void FactorC(double t1, double t2, TensorUtils::TensorOrder1& fcv, TensorUtils::TensorOrder1& fcvt, TensorUtils::TensorOrder1& fcat);
+    TensorUtils::TensorOrder2* Lambda(int ns, int nd, TensorUtils::TensorOrder1& ppd);
+    double SMomentum(TensorUtils::TensorOrder1& sp);
+    double Flam(double sx, double sy, double sz);
+    TensorUtils::TensorOrder2* Dim3to2(TensorUtils::TensorOrder3& tensor, int n);
+    TensorUtils::TensorOrder2* Dim4to2(TensorUtils::TensorOrder4& tensor, int n1, int n2);
+    
+    TensorUtils::TensorOrder2* Mult3Matrices(TensorUtils::TensorOrder2& mat1,
+                                             TensorUtils::TensorOrder2& mat2,
+                                             TensorUtils::TensorOrder2& mat3);
+    
+    TensorUtils::TensorOrder2* MatMult(TensorUtils::TensorOrder2& mat1,
+                                       TensorUtils::TensorOrder2& mat2);
+  
+    TComplex Mult2(TensorUtils::TensorOrder2& c_a, TensorUtils::TensorOrder4& c_b,
+                   TensorUtils::TensorOrder2& c_c, TensorUtils::TensorOrder4& c_d,
+                   int n_alpha,int n_beta);
+    
+    //double FMV(TensorUtils::TensorOrder1& xp1, TensorUtils::TensorOrder1& xp2);
 
     // For now, I want to reproduce the result from the paper, so I use their numbers. We can change that once we are sure the code is doing what we expect it to do.
     static const double fgVMassSq = 0.71;    // GeV
@@ -139,9 +149,13 @@ namespace genie {
     static const double fgFca5P33 = 1;
     static const int fgnFF = 4;      // Form factors of the helicity amplitude
 
-  private:
-    void LoadConfig (void);
+    enum Nucleon{
+      kProton  = 0,
+      kNeutron = 1
+    };
 
+  private:
+ 
     double fGw;
 
     // Whatever was in the common block of the fortran code.
@@ -158,29 +172,33 @@ namespace genie {
     int fNucleon;
   
     // 4vectors
-    utils::TensorDim1* xp;
-    utils::TensorDim1* xpp;
-    utils::TensorDim1* xpd;
-    utils::TensorDim1* xpdc;
-    utils::TensorDim1* xk;
-    utils::TensorDim1* xkp;
-    utils::TensorDim1* xq;
-    utils::TensorDim1* xqf;
+    TensorUtils::TensorOrder1 xp;
+    TensorUtils::TensorOrder1 xpp;
+    TensorUtils::TensorOrder1 xpd;
+    TensorUtils::TensorOrder1 xpdc;
+    TensorUtils::TensorOrder1 xk;
+    TensorUtils::TensorOrder1 xkp;
+    TensorUtils::TensorOrder1 xq;
+    TensorUtils::TensorOrder1 xqf;
 
     // Dirac slashed version of the above
-    utils::TensorDim2* c_p;
-    utils::TensorDim2* c_pp;
-    utils::TensorDim2* c_k;
-    utils::TensorDim2* c_kp;
-    utils::TensorDim2* c_q;
-    utils::TensorDim2* c_qf;
+    TensorUtils::TensorOrder2 c_p;
+    TensorUtils::TensorOrder2 c_pp;
+    TensorUtils::TensorOrder2 c_k;
+    TensorUtils::TensorOrder2 c_kp;
+    TensorUtils::TensorOrder2 c_q;
+    TensorUtils::TensorOrder2 c_qf;
   
-    utils::TensorDim2* cpm;
-    utils::TensorDim2* cppm;
-    utils::TensorDim2* cpqm;
-    utils::TensorDim2* cppqm;
+    TensorUtils::TensorOrder2 cpm;
+    TensorUtils::TensorOrder2 cppm;
+    TensorUtils::TensorOrder2 cpqm;
+    TensorUtils::TensorOrder2 cppqm;
     
+    TensorUtils::TensorOrder2 DM[5];
+    TensorUtils::TensorOrder2 metric;
+    TensorUtils::TensorOrder2 unity;
+
   };
-    */
-//}       // genie namespace
+} // genie namespace
+
 #endif  // _LAR_NUGAMMA_XSEC_H_
