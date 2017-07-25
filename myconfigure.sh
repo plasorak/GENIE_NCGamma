@@ -1,0 +1,1 @@
+./configure --enable-rwght --enable-atmo --with-pythia6-lib=$PYTHIA6 --with-lhapdf-lib=$LHAPDF/lib --with-lhapdf-inc=$LHAPDF/include --with-log4cpp-lib=/data/icecube/software/dependencies/log4cpp/lib/ --with-log4cpp-inc=/data/icecube/software/dependencies/log4cpp/include/ --enable-debug

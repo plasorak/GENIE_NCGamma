@@ -1,0 +1,67 @@
+export BASE=/data/icecube/software
+
+export BOOST=${BASE}/dependencies/boost_1_61_0
+
+export OPENMPI=${BASE}/dependencies/openmpi-1.10.0
+export OPAL_PREFIX=$OPENMPI
+export OPENBLAS=${BASE}/dependencies/OpenBLAS
+export CDK=${BASE}/dependencies/cdk-5.0-20150928
+export CFITSIO=${BASE}/dependencies/cfitsio
+export PKG_CONFIG_PATH=${BASE}/dependencies/pcre-8.34/lib/pkgconfig/:${BASE}/dependencies/lzma-4.42.0alpha6/lib/pkgconfig
+export PCRE=${BASE}/dependencies/pcre-8.34
+export LZMA=${BASE}/dependencies/lzma-4.42.0alpha6
+export SWIG=${BASE}/dependencies/swig-3.0.7
+
+export PYTHIA6=${BASE}/pythia6428/v6_428/lib
+export ROOTSYS=${BASE}/root_5_34_32
+export ROOUNFOLD=${BASE}/RooUnfold
+export LOG4CPP=${BASE}/dependencies/log4cpp
+export LHAPDF=${BASE}/dependencies/lhapdf-5.9.1
+export LHAPATH=${BASE}/dependencies/lhapdf-5.9.1/share/lhapdf
+export GENIE=/data/lasorak/GENIE/RishiGENIE/GENIE_NCGamma
+export SLALIB=${BASE}/dependencies/slalib-c-0.0/slalib
+export WCSIM_HOME=${BASE}/WCSim
+
+# export G4INSTALL=${BASE}/geant4.9.6.p04
+# export Geant4_DIR=$G4INSTALL
+# export G4LIB=${BASE}/geant4.9.6.p04/lib64
+# export LD_LIBRARY_PATH=${G4LIB}:${LD_LIBRARY_PATH}
+
+# DATADIR is the directory where your Geant data files are stored
+# export DATADIR=${G4INSTALL}/data-files
+# export G4LEVELGAMMADATA=${DATADIR}/PhotonEvaporation2.3
+# export G4RADIOACTIVEDATA=${DATADIR}/RadioactiveDecay3.6
+# export G4LEDATA=${DATADIR}/G4EMLOW6.32
+# export G4NEUTRONHPDATA=${DATADIR}/G4NDL4.2
+
+# export G4UI_USE_TERMINAL=1
+# export G4UI_USE_TCSH=1
+# export G4VIS_USE_OPENGLX=1
+# export G4VIS_USE_RAYTRACER=1
+# export G4VIS_USE_RAYTRACERX=1
+
+export GSL_2_2=${BASE}/dependencies/gsl-2.2
+export PHYSTOOLS=${BASE}/dependencies/PhysTools
+export SQUIDS=${BASE}/dependencies/SQuIDS
+export NUSQUIDS=${BASE}/dependencies/nuSQuIDS
+
+export VIRTUALENV=${BASE}/dependencies/virtualenv
+export PYTHONPATH=${NUSQUIDS}/src/resources/python/bindings/:$VIRTUALENV/lib/python2.6/site-packages:$ROOTSYS/lib
+
+LD_LIBRARY_PATH=$NUSQUIDS/lib:$SQUIDS/lib:$PHYSTOOLS/lib:$GSL_2_2/lib:$ROOUNFOLD/lib:$SLALIB/lib:$CFITSIO/lib:$CDK/lib:$OPENBLAS/lib:$OPENMPI/lib:$GENIE/lib:$LOG4CPP/lib:$LHAPDF/lib:$ROOTSYS/lib:$PYTHIA6:$LZMA/lib:$PCRE/lib:$BOOST/lib:$LD_LIBRARY_PATH
+PATH=$GSL_2_2/bin:$SWIG/bin:$VIRTUALENV/bin:$CDK/bin:$OPENMPI/bin:$GENIE/bin:$LOG4CPP/bin:$LHAPDF/bin:$ROOTSYS/bin:$LZMA/bin:$PCRE/bin:$PATH
+
+export LD_LIBRARY_PATH
+export PATH
+
+# VENVPATH=${BASE}/dependencies/venv/bin/activate
+# if [ -f $VENVPATH ]; then
+#   source $VENVPATH
+#   echo "================================="
+#   echo 'To exit virtual environment for python type "deactivate"'
+#   echo "================================="
+# else
+#   echo "================================="
+#   echo "Error: Virual environment for python not found in $VENVPATH"
+#   echo "================================="
+# fi
