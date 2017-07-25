@@ -23,6 +23,7 @@
 #include "PDG/PDGUtils.h"
 #include "Utils/KineUtils.h"
 #include "NuGamma/TensorInc.h"
+#include "BaryonResonance/BaryonResonance.h"
 
 using namespace genie;
 using namespace genie::constants;
@@ -551,29 +552,26 @@ double LARNCGammaXSec::DeltaPropagator(TensorOrder1&am)
   return 1./(temp - fgMnSq);
 }
 //____________________________________________________________________________
-TComplex LARNCGammaXSec::Propagator(int nexcit, TensorOrder1&sp)
+TComplex LARNCGammaXSec::Propagator(Resonance_t res, TensorOrder1&sp)
 {
   //The propagator of the excited resonances 
   double smr;
-  if     (nexcit == 0)    smr = LARNCGammaXSec::fgMn;
-  else if(nexcit == 1)    smr = LARNCGammaXSec::fgMdelta;
-  else if(nexcit == 2)    smr = LARNCGammaXSec::fgMP11;
-  else if(nexcit == 3)    smr = LARNCGammaXSec::fgMD13;
-  else if(nexcit == 4)    smr = LARNCGammaXSec::fgMS11;
-  else{
-    std::cout << "nexcit should be 0 to 4" <<std::endl;
-    exit(1);
-  }
-
+  if     (res == kNoResonance) smr = LARNCGammaXSec::fgMn;
+  else if(res == kP33_1232)    smr = LARNCGammaXSec::fgMdelta;
+  else if(res == kP11_1440)    smr = LARNCGammaXSec::fgMP11;
+  else if(res == kD13_1520)    smr = LARNCGammaXSec::fgMD13;
+  else if(res == kS11_1535)    smr = LARNCGammaXSec::fgMS11;
+  else LOG("LARNCGammaXSec", kERROR) << "Unsupported resonance!";
+  
   double sp2 = DotProdMetric(sp, sp);
 
   TComplex cu(0,1);
   TComplex prop;
-  if(nexcit == 1){
+  if(res == kP33_1232){
     // call medium(sp2,cprop)          for the Delta, we use the deltamedium.f90
     prop = LARNCGammaXSec::cDdelta(sp);
   }else{
-    double wid = LARNCGammaXSec::Width(nexcit, sp2);
+    double wid = LARNCGammaXSec::Width(res, sp2);
     prop = 1. / (sp2 - TMath::Power(smr, 2) + cu * wid * smr);
   }
   return prop;
@@ -1579,7 +1577,8 @@ TensorOrder2* LARNCGammaXSec::Lambda(int ns, int nd, TensorOrder1& ppd){
   return clam;
   
 }
-TComplex LARNCGammaXSec::Width(int nexcit, double sp2){
+
+TComplex LARNCGammaXSec::Width(Resonance_t res, double sp2){
   // use parameter
   // implicit real*8 (a,b,d-h,o-z)
   // implicit complex*16 (c)
@@ -1588,83 +1587,155 @@ TComplex LARNCGammaXSec::Width(int nexcit, double sp2){
   // ! xmsigma=0.475           ! For Sigma-> Pi Pi in S-wave
   // ! xmeta=0.548
 
-  double wid;
-  switch(nexcit){
-  case 0:
+  TComplex wid;
+  switch(res){
+  case kNoResonance:
     wid=0.;
     break;
-  case 1:   
-    if((sp2-(xmn+xmpi)*(xmn+xmpi)) > 0){
-      slam=flam(sp2,xmpi**2,xmn2);
-      wd=1.d0/(6.d0*pi)*(fstar/xmpi)**2 *xmn/sp2**2  *         (sqrt(slam)/(2.d0))**3;
+  case kP33_1232:   
+    if((sp2 - (fgMnucl+fgMpi)*(fgMnucl+fgMpi)) > 0){
+      double slam = flam(sp2, fgMpi*fgMpi, fgMnSq);
+      wd= 1. / (6.*TMath::Pi())*(fgFStar/fgMpi)*(fgFStar/fgMpi)*fgMnucl/(sp2*sp2) * TMath::Power(TMath::Sqrt(slam)/(2.),3.);
     }else{
       wd=0.;
     }
     double smr=xmd;
-    pwidnpi0=0.117;
-    pwidth1(sp2,smr,xmn,xmpi,1,pwidnpi0,pwidnpi);                           //decay mode N-Pi
+    double pwidnpi0 = 0.117;
+    pwidth1(sp2, smr,fgMnucl,fgMpi,1,pwidnpi0,pwidnpi);                           //decay mode N-Pi
     wid=wd;
     // P11(1440)
     break;
-  case 2:
+  case kP11_1440:
     smr=xmp11;
     pwidnpi0=0.3*0.65;  
-    pwidth1(sp2,smr,xmn,xmpi,1,pwidnpi0,pwidnpi);//                           ! decay mode N-Pi
+    pwidth1(sp2,smr,fgMnucl,fgMpi,1,pwidnpi0,pwidnpi);//                           ! decay mode N-Pi
     pwiddpi0=0.3*0.2;
     pwiddnpi0=0.117;//            ! the width of Delta 
-    pwidth2(sp2,smr,xmd,xmpi,1,pwiddpi0,xmn,xmpi,1,pwiddnpi0,pwiddpi);//      ! decay mode Delta-pi
+    pwidth2(sp2,smr,xmd,fgMpi,1,pwiddpi0,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi);//      ! decay mode Delta-pi
     pwidns0=0.3*0.15;
     pwidspi0=0.6;//               ! the width of Sigma->Pi Pi
-    pwidth2(sp2,smr,xmsigma,xmn,0,pwidns0,xmpi,xmpi,0,pwidspi0,pwidns);//     ! decay mode N-Sigma
+    pwidth2(sp2,smr,xmsigma,fgMnucl,0,pwidns0,fgMpi,fgMpi,0,pwidspi0,pwidns);//     ! decay mode N-Sigma
     
     wid= pwidnpi +pwiddpi + pwidns;
-    // !print *,pwiddpi,pwidnpi,pwidns,j1,i
-    //   !  stop
-    //   ! D13(1520)
-  case 3:   
+    break;
+  case kD13_1520:   
     smr=xmd13;        
     pwidnpi0=0.115*0.6;
-    pwidth1(sp2,smr,xmn,xmpi,2,pwidnpi0,pwidnpi);//                             ! n_pi
+    pwidth1(sp2,smr,fgMnucl,fgMpi,2,pwidnpi0,pwidnpi);//                             ! n_pi
     pwiddpi00=0.115*0.15;
     pwiddpi20=0.115*0.125;     
     pwiddnpi0=0.117;
-    pwidth2(sp2,smr,xmd,xmpi,0,pwiddpi00,xmn,xmpi,1,pwiddnpi0,pwiddpi0);//    ! decay mode Delta-pi L=0
-    pwidth2(sp2,smr,xmd,xmpi,2,pwiddpi20,xmn,xmpi,1,pwiddnpi0,pwiddpi2);//    ! decay mode Delta-pi L=2
+    pwidth2(sp2,smr,xmd,fgMpi,0,pwiddpi00,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi0);//    ! decay mode Delta-pi L=0
+    pwidth2(sp2,smr,xmd,fgMpi,2,pwiddpi20,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi2);//    ! decay mode Delta-pi L=2
     pwidnr00=0.115*0.09;
     pwidnr20=0.115*0.035;
     pwidrpi0=0.1491;//      ! the width of Rho->pi pi P-wave 
-    pwidth2(sp2,smr,xmrho,xmn,0,pwidnr00,xmpi,xmpi,1,pwidrpi0,pwidnr0);//       ! decay mode N-Rho L=0
-    pwidth2(sp2,smr,xmrho,xmn,2,pwidnr20,xmpi,xmpi,1,pwidrpi0,pwidnr2);//       ! decay mode N-Rho L=2
+    pwidth2(sp2,smr,xmrho,fgMnucl,0,pwidnr00,fgMpi,fgMpi,1,pwidrpi0,pwidnr0);//       ! decay mode N-Rho L=0
+    pwidth2(sp2,smr,xmrho,fgMnucl,2,pwidnr20,fgMpi,fgMpi,1,pwidrpi0,pwidnr2);//       ! decay mode N-Rho L=2
 
     wid= pwidnpi + pwiddpi0 + pwiddpi2 + pwidnr0 + pwidnr2;
-    //! S11(1535)
-  case 4:
+    break;
+  case kS11_1535:
     smr=xms11;
     pwidnpi0=0.15*0.45;
-    pwidth1(sp2,smr,xmn,xmpi,0,pwidnpi0,pwidnpi);//                             ! N-Pi
+    pwidth1(sp2,smr,fgMnucl,fgMpi,0,pwidnpi0,pwidnpi);//                             ! N-Pi
     pwidne0=0.15*0.42;
-    pwidth1(sp2,smr,xmn,xmeta,0,pwidne0,pwidne);//                              ! N-eta
+    pwidth1(sp2,smr,fgMnucl,xmeta,0,pwidne0,pwidne);//                              ! N-eta
     pwidnspi0=0.15*0.08;
     pwidns0=0.;//   ! call the width of P11(1440)
-    pwidth2(sp2,smr,xmp11,xmpi,0,pwidnspi0,xmn,xmpi,1,pwidns0,pwidnspi);//      ! N*(1440)-Pi   
+    pwidth2(sp2,smr,xmp11,fgMpi,0,pwidnspi0,fgMnucl,fgMpi,1,pwidns0,pwidnspi);//      ! N*(1440)-Pi   
     pwiddpi0=0.15*0.01;
     pwiddnpi0=0.117;
-    pwidth2(sp2,smr,xmd,xmpi,2,pwiddpi0,xmn,xmpi,1,pwiddnpi0,pwiddpi);//     ! Delta-Pi L=2
+    pwidth2(sp2,smr,xmd,fgMpi,2,pwiddpi0,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi);//     ! Delta-Pi L=2
     pwidnr0=0.15*0.02;
     pwidrpi0=0.1491;
-    pwidth2(sp2,smr,xmrho,xmn,0,pwidnr0,xmpi,xmpi,1,pwidrpi0,pwidnr);//       ! decay mode N-Rho L=2
+    pwidth2(sp2,smr,xmrho,fgMnucl,0,pwidnr0,fgMpi,fgMpi,1,pwidrpi0,pwidnr);//       ! decay mode N-Rho L=2
     pwidns0=0.15*0.02;
     pwidspi0=0.6;//               ! the width of Sigma->Pi Pi
-    pwidth2(sp2,smr,xmsigma,xmn,0,pwidns0,xmpi,xmpi,0,pwidspi0,pwidns);//     ! decay mode N-Sigma       
-    
-    
+    pwidth2(sp2,smr,xmsigma,fgMnucl,0,pwidns0,fgMpi,fgMpi,0,pwidspi0,pwidns);//     ! decay mode N-Sigma       
     wid=pwidnpi + pwidne  + pwiddpi + pwidnspi + pwidnr + pwidns;
+    break;
   }
+
   return wid;
 }
 
+TComplex pwidth1(sp2,smr,sma,smb,l,pwid0){//   ! Both of the particle A and B are stable
+  // implicit real*8 (a,b,d-h,o-z)
+  // implicit complex*16 (c)
+  // real*8,external :: pcm     
 
+  if(sp2 < (sma+smb)*(sma+smb)){
+    pwid=0.;
+  }else{
+    sw=TMath::Sqrt(sp2);
+    wpcm=pcm(sw,sma,smb);
+    rpcm=pcm(smr,sma,smb);
+    rho=wpcm**(2*l+1)/sw;
+    rho0=rpcm**(2*l+1)/smr;
+    pwid=pwid0*rho/rho0;
+  }
+  return pwid;
+}
 
+TComplex pwidth2(sp2,smr,sma,smb,l,pwid1,smc,smd,l2,pwid2)//   ! Both of the particle A and B are stable
+  // implicit real*8 (a,b,d-h,o-z)
+  // implicit complex*16 (c)
+  // real*8,external :: pcm   
+  
+  if(sp2 < (smc+smd+smb)*(smc+smd+smb)){
+    pwid=0.;
+  }else{
+    sw=TMath::Sqrt(sp2);
+    rho_width(sw,sma,smb,l,smc,smd,l2,pwid2,rho);
+    rho_width(smr,sma,smb,l,smc,smd,l2,pwid2,rho0);
+    pwid=pwid1*rho/rho0 ;
+  }
+return pwid;
+}
+
+       SUBROUTINE rho_width(sw,sma,smb,l,smc,smd,l2,pwid2,rho)  
+  implicit real*8 (a,b,d-h,o-z)
+  implicit complex*16 (c)
+  real*8,dimension(200) :: x,f1
+  real*8,external :: pcm   
+  pi=acos(-1.d0)  
+
+  pmin=0.d0
+  pmax=pcm(sw,smc+smd,smb)
+  n=1
+  np=20*n
+  call DSG20r(pmin,pmax,n,x,np)
+  do i=1,np
+     f1(i)=fkernel_rho(x(i))
+     ! print *,f1(i)
+  end do
+  ! stop
+  call DRG20r(pmin,pmax,n,f1,rho)
+
+contains
+
+  FUNCTION fkernel_rho(pab)
+    implicit real*8 (a,b,d-h,o-z)
+    implicit complex*16 (c)
+    ! real*8,dimension(4,5) :: swidd
+    swa=sqrt(sw**2+smb**2-2.d0*sw*sqrt(pab**2+smb**2) ) 
+    if(abs(sma-1.44).gt.1d-5) then
+       call pwidth1(swa**2,sma,smc,smd,l2,pwid2,pwida)
+       ! print *,swa,sma,smc,smd,l2,pwid2,pwida
+       ! stop
+    else 
+       call width(2,swa**2,pwida) 
+    endif
+
+    fkernel_rho=2.d0/pi*pab**(2*l+2)/sqrt(pab**2+smb**2)*sma*pwida  &
+         /( (swa**2-sma**2)**2 + sma**2*pwida**2 ) 
+    !    print*,xwa,sma,xmc,xmdd,l2,pwid2,pwida,fkernel_rho,pab
+    !    stop
+    return
+  end function fkernel_rho
+
+END SUBROUTINE rho_width
 //____________________________________________________________________________
 /*
 // This in theory should be useless
