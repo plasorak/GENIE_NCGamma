@@ -7,3 +7,4 @@ bin/
 .svn/
 *.cc
 ./src/make/Make.config
+gxspl-small.xml
