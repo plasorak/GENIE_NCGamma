@@ -1658,15 +1658,15 @@ TComplex LARNCGammaXSec::Width(Resonance_t res, double sp2){
   }
 
   return wid;
-}
+}   
 
-TComplex pwidth1(sp2,smr,sma,smb,l,pwid0){//   ! Both of the particle A and B are stable
+TComplex pwidth1(sp2, smr, sma, smb, l, pwid0){//   ! Both of the particle A and B are stable
   // implicit real*8 (a,b,d-h,o-z)
   // implicit complex*16 (c)
-  // real*8,external :: pcm     
+  // real*8,external :: pcm       
 
   if(sp2 < (sma+smb)*(sma+smb)){
-    pwid=0.;
+    pwid=0.0;
   }else{
     sw=TMath::Sqrt(sp2);
     wpcm=pcm(sw,sma,smb);
