@@ -45,10 +45,12 @@
 #include "PDG/PDGLibrary.h"
 #include "Utils/KineUtils.h"
 #include "Utils/MathUtils.h"
+#include "Numerical/RandomGen.h"
 
 using namespace genie;
 using namespace genie::utils;
 using namespace genie::constants;
+using namespace TMath;
 
 ClassImp(KPhaseSpace)
 
@@ -395,6 +397,58 @@ Range1D_t KPhaseSpace::q2Lim_W(void) const
   q2.min = - Q2.max;
   q2.max = - Q2.min;
   return q2;
+}
+//____________________________________________________________________________
+Range1D_t KPhaseSpace::EGammaLim_Q2W(void) const
+{
+  // Computes the NCGamma energy range at the input momentum transfer Q2 and invariant mass W
+  // Code largely from RESNCGammaGenerator::ProcessEventRecord.
+
+  Range1D_t EGamma;
+  EGamma.min = 0;
+  EGamma.max = 0;
+
+  RandomGen * rnd = RandomGen::Instance();
+
+  const InitialState & init_state = fInteraction->InitState();
+
+  // Get the relevant set variables
+  double gW = kinematics::W(fInteraction);
+  double gQ2 = kinematics::Q2(fInteraction);
+
+  TLorentzVector * ProbeP4 = init_state.GetProbeP4(kRfHitNucRest);
+  TLorentzVector HitNucP4 = init_state.Tgt().HitNucP4();
+
+  double HitNucM = init_state.Tgt().HitNucP4().M();
+  double OutNeuE = ProbeP4->E() + (1/(2*HitNucM))*( Power(HitNucM,2) - Power(gW,2) - gQ2 );
+  double OutNeuCosTheta = 1 - (1/(2*ProbeP4->E()*OutNeuE))*gQ2;
+  double OutNeuSinTheta = Sqrt(1-Power(OutNeuCosTheta,2));
+  double OutNeuPhi = 2*TMath::Pi() * rnd->RndKine().Rndm();
+
+  TLorentzVector ResP4( -OutNeuE * OutNeuSinTheta * Cos(OutNeuPhi) , -OutNeuE * OutNeuSinTheta * Sin(OutNeuPhi) , ProbeP4->E() - OutNeuE * OutNeuCosTheta , ProbeP4->E() - OutNeuE + HitNucM );
+
+  double ProbeTheta = ACos( ProbeP4->Z() / ProbeP4->E() );
+  double ProbePhi = ATan2( ProbeP4->Y() , ProbeP4->X() );
+
+  ResP4.RotateY(ProbeTheta);
+  ResP4.RotateZ(ProbePhi);
+
+  ResP4.Boost(HitNucP4.BoostVector());
+
+  double TgtNucM = 0;
+
+	if(init_state.IsNuN()) {
+		TgtNucM = 0.939565346;
+	} else if(init_state.IsNuP()) {
+		TgtNucM = 0.938272046;
+	} else {
+		LOG("RESNCgKinematic", pWARN) << "*** Hit nucleon not a nucleon???";
+	}
+
+  EGamma.max = ResP4.E() - TgtNucM;
+  
+  
+  return EGamma;
 }
 //____________________________________________________________________________
 Range1D_t KPhaseSpace::Q2Lim(void) const

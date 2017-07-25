@@ -4,7 +4,7 @@
 lib/
 bin/
 *.svn*
-.svn/
-*.cc
-./src/make/Make.config
 gxspl-small.xml
+.svn
+src/*/_ROOT_DICT*.cc
+src/*/_ROOT_DICT*.h
