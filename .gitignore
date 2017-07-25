@@ -1,8 +1,9 @@
 *.o
 *.so
 *.exe
-lib
-bin
+lib/
+bin/
 *.svn*
-.svn
-*DICT*
+.svn/
+*.cc
+./src/make/Make.config
