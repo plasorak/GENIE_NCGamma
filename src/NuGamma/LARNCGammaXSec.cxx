@@ -24,45 +24,38 @@
 #include "Utils/KineUtils.h"
 #include "NuGamma/TensorInc.h"
 #include "BaryonResonance/BaryonResonance.h"
+#include "AlvarezRuso/IntegrationTools.h"
 
 using namespace genie;
 using namespace genie::constants;
 using namespace genie::utils;
 using namespace TensorUtils;
 
+double LARNCGammaXSec::gev_bar = 3.89379304 * TMath::Power(10,-28);
+double LARNCGammaXSec::gfermi = 1.16637 * TMath::Power(10, -5); 
 //____________________________________________________________________________
-LARNCGammaXSec::LARNCGammaXSec() :
-  XSecAlgorithmI("genie::LARNCGammaXSec")
+LARNCGammaXSec::LARNCGammaXSec()
 {
-
+  nnstep = 0;
 }
-//____________________________________________________________________________
-LARNCGammaXSec::LARNCGammaXSec(string config) :
-  XSecAlgorithmI("genie::LARNCGammaXSec", config)
-{
 
-}
 //____________________________________________________________________________
 LARNCGammaXSec::~LARNCGammaXSec()
 {
 
 }
 //____________________________________________________________________________
-double LARNCGammaXSec::XSec(const Interaction * interaction, KinePhaseSpace_t /*kps*/) const
+double LARNCGammaXSec::DiffXSec(const Interaction * interaction)
 {
-  if(! this -> ValidProcess    (interaction) ) return 0.;
-  if(! this -> ValidKinematics (interaction) ) return 0.;
   LOG("LARNCGammaXSec", pWARN)
     << "*** Calculating the cross section";
-  //  this->CalcAmplitude();
 
   InitialState* initialstate =  interaction->InitStatePtr();
-  Kinematics* kine = interaction->KinePtr();  
-  (void)kine;
-  double W =        interaction->KinePtr()->GetKV(kKVW);
-  double Q2 =       interaction->KinePtr()->GetKV(kKVQ2);
-  double EGamma =   interaction->KinePtr()->GetKV(kKVEGamma);
-  double PhiGamma = interaction->KinePtr()->GetKV(kKVPhiGamma);
+
+  W =        interaction->KinePtr()->GetKV(kKVW);
+  Q2 =       interaction->KinePtr()->GetKV(kKVQ2);
+  EGamma =   interaction->KinePtr()->GetKV(kKVEGamma);
+  PhiGamma = interaction->KinePtr()->GetKV(kKVPhiGamma);
   LOG("LARNCGammaXSec", pWARN)  << "W        " << W;
   LOG("LARNCGammaXSec", pWARN)  << "Q2       " << Q2;
   LOG("LARNCGammaXSec", pWARN)  << "EGamma   " << EGamma;
@@ -71,72 +64,233 @@ double LARNCGammaXSec::XSec(const Interaction * interaction, KinePhaseSpace_t /*
   
   gNeutrinoInit = (TLorentzVector*)initialstate->GetProbeP4()->Clone();
   gTargetInit   = (TLorentzVector*)initialstate->GetTgtP4()->Clone();
- 
 
-  //TensorOrder4& output1, output2;
-  //AmplitudeNum(interaction, output1, output2);
+  const int    nupdg = initialstate->ProbePdg();
+  const double Enu   = initialstate->ProbeE(kRfHitNucRest);
+
+  double nuxsec = 0, anuxsec = 0;
+
+  dxsec(Enu, W, Q2, 1, 0, nuxsec, anuxsec);
+
+  if(nupdg > 0) return nuxsec;
+  else          return anuxsec;
+
+  return 0;
+}
+
+void LARNCGammaXSec::fgaus(const int n, int* JS, double* x,
+                           void (*limit)(const int j, double& DN, double& UP),
+                           std::complex<double> (*integrand)(const int n, double* x),
+                           std::complex<double>&S){
+
+  double T[5] = { -0.9061798459, -0.5384693101, 0.0,          0.5384693101, 0.9061798459};
+  double C[5] = {  0.2369268851,  0.4786286705, 0.5688888889, 0.4786286705, 0.2369268851};
+  int m = 1;
+  double D1[11];
+  std::complex<double> D2[12];
+  D1[n+1] = 1.;
+  D2[n+1] = 1.;
+  double DN, UP;
+  double CC[11];
+  double IS[11][2];
   
+  while(true){
+    for(int j = m; j <= n; j++){
+      limit(j,DN,UP);
+      D1[j] = 0.5 * (UP - DN) / JS[j];
+      CC[j] = D1[j] + DN;
+      x [j] = D1[j] * T[1] + CC[j];
+      D2[j] = 0.0;
+      IS[j][1] = 1;
+      IS[j][2] = 1;
+    }
+  
+    int j = n;
+    std::complex<double> p;
+    while(j == n){
+      int k = IS[j][1];
+      if(j == n){
+        p = integrand(n,x);
+      }else{
+        p = 1.0;
+      }
 
-  return 1; // For now return 1
+      D2[j] = D2[j+1] * D1[j+1] * p * C[k] + D2[j];
+      IS[j][1] = IS[j][1] + 1;
+      if(IS[j][1] > 5){
+        if(IS[j][2] > JS[j]){
+          j = j - 1;
+          if(j == 0){
+            S = D2[1] * D1[1];
+            return;
+          }
+        }
+        IS[j][2] = IS[j][2] + 1;
+        CC[j]    = CC[j] + D1[j] * 2.0;
+        IS[j][1] = 1;
+      }
+
+      k = IS[j][1];
+      x[j] = D1[j] * T[k] + CC[j];
+    }
+    m = j+1;
+  }
 }
-//_____________________________________________________________________________
-double LARNCGammaXSec::Integral(const Interaction * interaction) const
-{
-  // Compute the cross section for a free fNucleon target
-  const InitialState & init_state = interaction -> InitState();
-  const Target &       target     = init_state.Tgt();
-  (void)target;
-  double Ev   = init_state.ProbeE(kRfHitNucRest);
-  (void)Ev;
-  double xsec = 1;
 
-  /*
-    Integrate over all the four fold cross section
-   */
+//************************************************************* 
+void LARNCGammaXSec::dxsec(const double Enu, const double W, const double Qsq,
+                           const int nucl, const int nd,
+                           double& dsigmaneutrino, double& dsigmaantineutrino){
+  //  int mdelta=0;
+  //double tq2=Qsq;
+  //int ndiag = nd;
+  //double fca5p33=1.;
+  //int nucleon=nucl;
+  //int nnstep=0;
+  //int nff=4;
+  //double xenergy = Enu;
+  //double qfmin = 0.14;
+  //double s = fgMnSq + 2. * fgMn * Enu;
+  //double Wmin = fgMn;
+  //double Wmax = TMath::Sqrt(s);
+  double sf = fgAlpha / (TMath::Power(2.*TMath::Pi(),3) * 16. * Enu * fgMn) *
+    gev_bar * TMath::Power(10, 42);
+  std::complex<double> cdc;
+  dcross2(2, cdc);
+  std::complex<double> ctcr = cdc * 2. * W * sf;
+  dsigmaneutrino = ctcr.real();
+  dsigmaantineutrino = ctcr.imag();
+}
 
-  return xsec;
+//*********************Four integration**************************
+void LARNCGammaXSec::dcross2(const int n,
+                             std::complex<double>& cdc){
+  int* js;
+  js = new int[n];
+
+  for(int i = 0; i < n; ++i){
+    js[i] = nprecise;
+  }
+  //   js(2)=8       // phi_qf  
+  //   js(1)=8       // theta_kp
+  //   JS(3)=8       // xqf0 
+  //   JS(4)=8       // xqf0 
+  std::complex<double> cs;
+  double* x;
+  x= new double[n];
+  
+  fgaus(n, js, x, &LARNCGammaXSec::FS, &LARNCGammaXSec::ckernel, cs);
+  cdc = cs;
+  delete x;
+}
+
+//*****************************************************
+std::complex<double> LARNCGammaXSec::ckernel(const int n,
+                                             double* x){
+  
+  double xkp0 = (fgMnSq - Q2 - W * W + 2. * fgMn * Enu) / 2. / fgMn;
+  double ddd  = 1. - Q2 / 2. / Enu / xkp0;
+  if(abs(ddd) > 1.){
+    std::cout << "error: the costheta_kp is larger than 1!\n";
+    std::cout << " costheta_kp = " << 1.-Q2/2./Enu/xkp0<< std::endl;
+    return 0.;
+  }
+  double theta_kp = acos(ddd);
+  double phi_qf   = x[1];
+  double theta_qf = x[2];
+  
+  double xqf0 = (fgMn * (Enu - xkp0) - Q2 * 0.5) / (fgMn + Enu - xkp0 -
+                                                        Enu * cos(theta_qf)
+                                                        +xkp0 * (sin(theta_kp) * sin(theta_qf)*cos(phi_qf) +
+                                                                 cos(theta_kp) * cos(theta_qf)));
+  
+  double beta_cos = (TMath::Sin(theta_kp) * TMath::Sin(theta_qf) * TMath::Cos(phi_qf) +
+                     TMath::Cos(theta_kp) * TMath::Cos(theta_qf));
+  double s_kqf = Enu * cos(theta_qf) - xkp0 * beta_cos;
+  
+  if((xqf0 < 0) || (xqf0 > (Enu-xkp0))){
+    return 0.;
+  }else{
+    double t1,t2;
+    
+    momentum(xkp0, theta_kp, xqf0, theta_qf, phi_qf, fgMn, 0., 0., t1, t2);
+    
+    TComplex ctensor_lh(0.,0.);
+    AmpNum(t1, t2, ctensor_lh);
+    ctensor_lh = xqf0 * TMath::Sin(theta_qf) * xkp0 /
+      TMath::Abs((fgMn + Enu - xkp0) - s_kqf) *
+      ctensor_lh * gfermi * gfermi / 2. *
+      TMath::Abs(1. / 4. / Enu / fgMn / xkp0);
+    
+    std::complex<double> cresult(ctensor_lh.Re(), ctensor_lh.Im());
+    
+    nnstep++;
+    return cresult;
+  }
+}
+
+void LARNCGammaXSec::FS(const int J,
+                        double& DN, double& UP){
+  
+  if (J > 1){
+    DN=0.;
+    UP=2.*TMath::Pi();
+  }else if(J == 2){
+    DN=0.;
+    UP=TMath::Pi();
+  }
+}
+
+////******************mult integration **************************************
+//***********Definition fo the kinematical in the lab frame *******************
+void LARNCGammaXSec::momentum(const double xkp0,     const double theta_kp,
+                              const double xqf0,     const double theta_qf,
+                              const double phi_qf,   const double xp0,
+                              const double theta_p,  const double phi_p,
+                              double& t1,            double& t2){
+
+  xk(0)=Enu;
+  xk(1)=0.;
+  xk(2)=0.;
+  xk(3)=Enu;
+  
+  double spn=sqrt(xp0*xp0-fgMnSq);
+  xp(0)=xp0;
+  xp(1)=spn*sin(theta_p)*cos(phi_p);
+  xp(2)=spn*sin(theta_p)*sin(phi_p);
+  xp(3)=spn*cos(theta_p);
+  // double tpn=theta_p;
+  if(spn < -TMath::Power(10, -6)){
+    LOG("LARNCGammaXSec", pFATAL) << "spn is less than 0" << xp0;
+  }
+  xqf(0)=xqf0;
+  xqf(1)=xqf0*sin(theta_qf)*cos(phi_qf);
+  xqf(2)=xqf0*sin(theta_qf)*sin(phi_qf);
+  xqf(3)=xqf0*cos(theta_qf);
+  
+  xkp(0)=xkp0;
+  xkp(1)=xkp0*sin(theta_kp);
+  xkp(2)=0.;
+  xkp(3)=xkp0*cos(theta_kp);
+  
+  
+  xpp = xk + xp - xkp - xqf;
+  xq  = xk - xkp;
+  xpd = xp + xq;
+  xpdc= xpp- xq;
+  
+  t1 = DotProdMetric(xqf,xqf);
+  t2 = DotProdMetric(xq,xq);
+  //double t3 = FMV(xpp,xpp);
+  
+  if(xpp(0).Re() < fgMn){
+    LOG("LARNCGammaXSec", pFATAL) << "xpp(0) is less than fgMn ";// << xpp << "\n" << xk << "\n" << xkp << "\n" << xp << "\n" << xqf;
+  }
 }
 
 //____________________________________________________________________________
-bool LARNCGammaXSec::ValidProcess(const Interaction * interaction) const
-{
-  if(interaction->TestBit(kISkipProcessChk)) return true;
-
-  //if(interaction->ProcInfo().IsRESNCGamma()) return true;
-  return false;
-}
-
-//____________________________________________________________________________
-bool LARNCGammaXSec::ValidKinematics(const Interaction* interaction) const
-{
-  if(interaction->TestBit(kISkipKinematicChk)) return true;
-  return true;
-}
-//____________________________________________________________________________
-void LARNCGammaXSec::Configure(const Registry & config)
-{
-  Algorithm::Configure(config);
-  this->LoadConfig();
-}
-//____________________________________________________________________________
-void LARNCGammaXSec::Configure(string config)
-{
-  Algorithm::Configure(config);
-  this->LoadConfig();
-}
-//____________________________________________________________________________
-void LARNCGammaXSec::LoadConfig(void)
-{
-  AlgConfigPool * confp = AlgConfigPool::Instance();
-  const Registry * gc = confp->GlobalParameterList();
-  (void)gc;
-  (void)confp;
-  //fGw = fConfig->GetDoubleDef("Gw", gc->GetDouble("RESNCGamma-Gw"));
-}
-
-
-//____________________________________________________________________________
-void LARNCGammaXSec::ElectroMagneticFormFactor(double t, int fNucleon, double &f1, double &f2)
+void LARNCGammaXSec::ElectroMagneticFormFactor(const double t, const int fNucleon,
+                                               double &f1, double &f2)
 {
   double gd = TMath::Power(1 - t/fgVMassSq, -2);
   double gmp = fgPMagMom * gd;
@@ -159,7 +313,8 @@ void LARNCGammaXSec::ElectroMagneticFormFactor(double t, int fNucleon, double &f
   f2 = (gm - ge)       / (1 - tao);
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::NeutralCurrentFormFactor(double t, int fNucleon, double &fv1, double &fv2, double &fva)
+void LARNCGammaXSec::NeutralCurrentFormFactor(const double t, const int fNucleon,
+                                              double &fv1, double &fv2, double &fva)
 {
   double tao = t / (4 * fgMn * fgMn);
 
@@ -195,7 +350,9 @@ void LARNCGammaXSec::NeutralCurrentFormFactor(double t, int fNucleon, double &fv
   }
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::P33_1232FormFactor(double q2, double &c3v, double &c4v, double &c5v, double &c3a, double &c4a, double &c5a, double &c6a)
+void LARNCGammaXSec::P33_1232FormFactor(const double q2,
+                                        double &c3v, double &c4v, double &c5v,
+                                        double &c3a, double &c4a, double &c5a, double &c6a)
 {
   // using MAID2007 in the vector sector
   // IMPORTANT: these are the CC form factors: CiV and CiA in Tables 5.5 and 5.6 in Tina's thesis 
@@ -253,7 +410,9 @@ void LARNCGammaXSec::P33_1232FormFactor(double q2, double &c3v, double &c4v, dou
   c6a = c5a * TMath::Power(fgMnucl, 2)/(TMath::Power(fgMpi, 2) - q2);
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::P11_1440FormFactor(double t1, TensorOrder2& fem, TensorOrder2& fvem, TensorOrder2& fvnc, TensorOrder1& fanc)
+void LARNCGammaXSec::P11_1440FormFactor(const double t1,
+                                        TensorOrder2& fem,  TensorOrder2& fvem,
+                                        TensorOrder2& fvnc, TensorOrder1& fanc)
 {
   //Form Factor For P11(1440)   
   //real*8,dimension(2,6) :: fem,fvem,fvnc
@@ -299,7 +458,9 @@ void LARNCGammaXSec::P11_1440FormFactor(double t1, TensorOrder2& fem, TensorOrde
   fanc(1) = -fanc(0);
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::S11_1535FormFactor(double t1, TensorOrder2& fem, TensorOrder2& fvem, TensorOrder2& fvnc, TensorOrder1& fanc)
+void LARNCGammaXSec::S11_1535FormFactor(const double t1,
+                                        TensorOrder2& fem,  TensorOrder2& fvem,
+                                        TensorOrder2& fvnc, TensorOrder1& fanc)
 {
   //Form Factor For S11(1535)   
   double smr = fgMS11;  // 1.535
@@ -338,7 +499,9 @@ void LARNCGammaXSec::S11_1535FormFactor(double t1, TensorOrder2& fem, TensorOrde
   fanc(1) = -fanc(0);
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::D13_1520FormFactor(double t1, TensorOrder2& fem, TensorOrder2& fvem, TensorOrder2& fvnc, TensorOrder2& fanc)
+void LARNCGammaXSec::D13_1520FormFactor(const double t1,
+                                        TensorOrder2& fem,  TensorOrder2& fvem,
+                                        TensorOrder2& fvnc, TensorOrder2& fanc)
 {
   //Form Factor For D13(1520)   
   //  real*8,dimension(2,6) :: fem,fvem,fvnc,fanc
@@ -399,7 +562,9 @@ void LARNCGammaXSec::D13_1520FormFactor(double t1, TensorOrder2& fem, TensorOrde
   fanc(1,3) = 0;
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::P33_1232FormFactor(double t1, TensorOrder2& fem, TensorOrder2& fvem, TensorOrder2& fvnc, TensorOrder2& fanc)
+void LARNCGammaXSec::P33_1232FormFactor(const double t1,
+                                        TensorOrder2& fem,  TensorOrder2& fvem,
+                                        TensorOrder2& fvnc, TensorOrder2& fanc)
 {
   // Form Factor For P33(1232)   
   //real*8,dimension[1][6) :: fem,fvem,fvnc,fanc
@@ -442,7 +607,9 @@ void LARNCGammaXSec::P33_1232FormFactor(double t1, TensorOrder2& fem, TensorOrde
   fanc(0,3) = -0.25 * fanc(0,4);
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::HelicityAmplitude(Resonance_t res, string nucl, double q2, double &A12, double &A32, double &S12)
+void LARNCGammaXSec::HelicityAmplitude(const Resonance_t res, const string nucl,
+                                       const double q2,
+                                       double &A12, double &A32, double &S12)
 {
   // Helicity amplitude
   // Helicity amplitides for fNucleon-resonance em transitions according to MAID2007
@@ -524,7 +691,8 @@ void LARNCGammaXSec::HelicityAmplitude(Resonance_t res, string nucl, double q2, 
   S12 = S12 * 1.E-3; 
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::EMtoNCFormFactor(double n, TensorOrder2&fvem, TensorOrder2& fvnc)
+void LARNCGammaXSec::EMtoNCFormFactor(const double n, const TensorOrder2&fvem,
+                                      TensorOrder2& fvnc)
 {
   // Transfer from EM FF to NC FF
   //  real*8,dimension[1][6) :: fvem,fvnc
@@ -545,14 +713,14 @@ void LARNCGammaXSec::EMtoNCFormFactor(double n, TensorOrder2&fvem, TensorOrder2&
   }
 }
 //____________________________________________________________________________
-double LARNCGammaXSec::DeltaPropagator(TensorOrder1&am)
+double LARNCGammaXSec::DeltaPropagator(const TensorOrder1& am)
 {
   //D(Q)=1/(Q**2-M**2)  
   double temp = SMomentum(am);
   return 1./(temp - fgMnSq);
 }
 //____________________________________________________________________________
-TComplex LARNCGammaXSec::Propagator(Resonance_t res, TensorOrder1&sp)
+TComplex LARNCGammaXSec::Propagator(const Resonance_t res, const TensorOrder1& sp)
 {
   //The propagator of the excited resonances 
   double smr;
@@ -561,7 +729,7 @@ TComplex LARNCGammaXSec::Propagator(Resonance_t res, TensorOrder1&sp)
   else if(res == kP11_1440)    smr = LARNCGammaXSec::fgMP11;
   else if(res == kD13_1520)    smr = LARNCGammaXSec::fgMD13;
   else if(res == kS11_1535)    smr = LARNCGammaXSec::fgMS11;
-  else LOG("LARNCGammaXSec", kERROR) << "Unsupported resonance!";
+  else LOG("LARNCGammaXSec", pFATAL) << "Unsupported resonance!";
   
   double sp2 = DotProdMetric(sp, sp);
 
@@ -610,7 +778,7 @@ void LARNCGammaXSec::TraceLight(TensorOrder2& c_tr_l, TensorOrder2& c_tr_l_anti)
   return;
 }
 //____________________________________________________________________________
-double LARNCGammaXSec::DeltaPi(TensorOrder1& sp){
+double LARNCGammaXSec::DeltaPi(const TensorOrder1& sp){
   // use parameter
   // implicit real*8 (a,b,d-h,o-z)
   // implicit complex*16 (c)
@@ -622,7 +790,9 @@ double LARNCGammaXSec::DeltaPi(TensorOrder1& sp){
   return del;
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::AEM(double t1, double t2, TensorOrder1& sp, TensorOrder1& sq, TensorOrder4& caem)
+void LARNCGammaXSec::AEM(const double t1, const double t2,
+                         const TensorOrder1& sp, const TensorOrder1& sq,
+                         TensorOrder4& caem)
 {
   // use parameter
   // implicit real*8 (a,b,d-h,o-z)
@@ -675,7 +845,9 @@ void LARNCGammaXSec::AEM(double t1, double t2, TensorOrder1& sp, TensorOrder1& s
   return;
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::ANC(double t1, double t2, TensorOrder1& sp, TensorOrder1& sq, TensorOrder4& canc)
+void LARNCGammaXSec::ANC(const double t1, const double t2,
+                         const TensorOrder1& sp, const TensorOrder1& sq,
+                         TensorOrder4& canc)
 {
   // use parameter
   // implicit real*8 (a,b,d-h,o-z)
@@ -731,7 +903,7 @@ void LARNCGammaXSec::ANC(double t1, double t2, TensorOrder1& sp, TensorOrder1& s
   return;
 }
 //____________________________________________________________________________
-TComplex LARNCGammaXSec::cDdelta(TensorOrder1& spp)
+TComplex LARNCGammaXSec::cDdelta(const TensorOrder1& spp)
 {
   //D_delta FUNCTION
   // Whatever that is..
@@ -767,7 +939,8 @@ TComplex LARNCGammaXSec::cDdelta(TensorOrder1& spp)
   return cDdelta;
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::FactorC(double t1, double t2, TensorOrder1& fcv, TensorOrder1& fcvt, TensorOrder1& fcat)
+void LARNCGammaXSec::FactorC(const double t1, const double t2,
+                             TensorOrder1& fcv, TensorOrder1& fcvt, TensorOrder1& fcat)
 {
   //    the factor with ~t is for NC,  without ~t is for EM;
   if(LARNCGammaXSec::fgnFF == 1){
@@ -863,7 +1036,8 @@ void LARNCGammaXSec::FactorC(double t1, double t2, TensorOrder1& fcv, TensorOrde
   }
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::VertexAB(double t1, double t2, TensorOrder4& ch_vertex1, TensorOrder4& ch_vertex2)
+void LARNCGammaXSec::VertexAB(const double t1, const double t2,
+                              TensorOrder4& ch_vertex1, TensorOrder4& ch_vertex2)
 {
   // use parameter
   // implicit real*8 (a,b,d-h,o-z)
@@ -943,7 +1117,8 @@ void LARNCGammaXSec::VertexAB(double t1, double t2, TensorOrder4& ch_vertex1, Te
 }
 
 //____________________________________________________________________________
-void LARNCGammaXSec::VertexCD(double t1, double t2, TensorOrder4& ch_ver_cd, TensorOrder4& ch_ver_cdt)
+void LARNCGammaXSec::VertexCD(const double t1, const double t2,
+                              TensorOrder4& ch_ver_cd, TensorOrder4& ch_ver_cdt)
 {
   // Gamma_delta for the Fia C and Fig D
   // use parameter
@@ -1066,14 +1241,15 @@ void LARNCGammaXSec::VertexE(TensorOrder4& ch_ver_e)
   return;
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::VertexJ12(double t1, TensorOrder4& ch_verj12, TensorOrder4& ch_verj12_t)
+void LARNCGammaXSec::VertexJ12(const double t1,
+                               TensorOrder4& ch_verj12, TensorOrder4& ch_verj12_t)
 {
   // fNParity=1 for P11(1440), fNParity=-1 for S11(1535);
   TensorOrder2 cpqm ;
   TensorOrder2 cppqm;
   cpqm  = c_p  + c_q + LARNCGammaXSec::fgMn * (*UnityOrder2());
   cppqm = c_pp - c_q + LARNCGammaXSec::fgMn * (*UnityOrder2());
-  int nexcit;
+  Resonance_t nexcit;
   // double fem, fvem, fvnc, fanc;
   TensorOrder2 fem ("fem",  2);
   TensorOrder2 fvem("fvem", 2);
@@ -1083,10 +1259,10 @@ void LARNCGammaXSec::VertexJ12(double t1, TensorOrder4& ch_verj12, TensorOrder4&
 
   if(fNParity == 1){
     LARNCGammaXSec::P11_1440FormFactor(t1, fem, fvem, fvnc, fanc);
-    nexcit = 2;
+    nexcit = kP11_1440;
   }else if(fNParity == -1){
     LARNCGammaXSec::S11_1535FormFactor(t1, fem, fvem, fvnc, fanc);
-    nexcit = 4;
+    nexcit = kS11_1535;
   }else{
     std::cout << "fNParity should be 1 or -1. Here is Form Factor of J=1/2" << std::endl;
     return;
@@ -1128,7 +1304,9 @@ void LARNCGammaXSec::VertexJ12(double t1, TensorOrder4& ch_verj12, TensorOrder4&
   ch_verj12_t.Conjugate();
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::Vertex12(double f1, double f2, double fa, TensorOrder1& sq, TensorOrder3& ver12)
+void LARNCGammaXSec::Vertex12(const double f1, const double f2, const double fa,
+                              const TensorOrder1& sq,
+                              TensorOrder3& ver12)
 {
   TensorOrder2* csq = SlashDirac(sq);
   TensorOrder3 ver12p;
@@ -1163,7 +1341,10 @@ void LARNCGammaXSec::Vertex12(double f1, double f2, double fa, TensorOrder1& sq,
   }
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::Vertex32(TensorOrder1& fcv, TensorOrder1& fca, TensorOrder1& sp, TensorOrder1& sq, TensorOrder4& cver32)
+void LARNCGammaXSec::Vertex32(const TensorOrder1& fcv,
+                              const TensorOrder1& fca, const TensorOrder1& sp,
+                              const TensorOrder1& sq,
+                              TensorOrder4& cver32)
 {
   //V-A(3/2) vertex32
   fcv(5) = 0;
@@ -1216,11 +1397,12 @@ void LARNCGammaXSec::Vertex32(TensorOrder1& fcv, TensorOrder1& fca, TensorOrder1
   }
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::VertexJ32(double t1, TensorOrder4& ch_verj32, TensorOrder4& ch_verj32_t)
+void LARNCGammaXSec::VertexJ32(const double t1,
+                               TensorOrder4& ch_verj32, TensorOrder4& ch_verj32_t)
 {
   //For D13(1520)
   // fNParity=1 for P33(1232), fNParity=-1 for D13(1520)
-  int nexcit;
+  Resonance_t nexcit;
   // double fem, fvem, fvnc, fanc;
   TensorOrder2 fem ("fem",  2, 5);
   TensorOrder2 fvem("fvem", 2);
@@ -1229,18 +1411,18 @@ void LARNCGammaXSec::VertexJ32(double t1, TensorOrder4& ch_verj32, TensorOrder4&
     
   if(fNParity == 1){
     LARNCGammaXSec::P33_1232FormFactor(t1,fem,fvem,fvnc,fanc);
-    nexcit=1;
+    nexcit = kP33_1232;
   }else if(fNParity==-1){
     LARNCGammaXSec::D13_1520FormFactor(t1,fem,fvem,fvnc,fanc);
-    nexcit=3;
+    nexcit = kD13_1520;
   }else{ 
     std::cout << "fNParity should be 1 or -1. Here is Form Factor of J=3/2" << std::endl;
     return;
   }
   int ii;
-  if(nexcit == 1)
+  if(nexcit == kP33_1232)
     ii = 1;
-  else if(nexcit==3)
+  else if(nexcit == kD13_1520)
     ii = -(fNucleon - 3) / 2; //        For neuturon, fNucleon=-1, i=2, for proton, fNucleon=1, i=1
   else{
     std::cout << "nexcit should be 1 or 3. Here is ver_j32" << std::endl;
@@ -1318,7 +1500,7 @@ void LARNCGammaXSec::VertexJ32(double t1, TensorOrder4& ch_verj32, TensorOrder4&
   ch_verj32_t.Conjugate();
 }
 //____________________________________________________________________________
-void LARNCGammaXSec::AmpNum(double t1, double t2, TensorOrder2& c_lh_both)
+void LARNCGammaXSec::AmpNum(const double t1, const double t2, TComplex& c_lh_both)
 {
   c_p  = (*SlashDirac(xp));
   c_pp = (*SlashDirac(xpp));
@@ -1392,8 +1574,8 @@ void LARNCGammaXSec::AmpNum(double t1, double t2, TensorOrder2& c_lh_both)
     ch_ver_t = ch_ver_cdt + ch_ver_abt;
   }
 
-  TensorOrder2 c_lh       ;
-  TensorOrder2 c_lh_anti  ;
+  TComplex c_lh     (0.,0.);
+  TComplex c_lh_anti(0.,0.);
   TensorOrder2 c_tr_l     ;
   TensorOrder2 c_tr_l_anti;
   LARNCGammaXSec::TraceLight(c_tr_l, c_tr_l_anti);
@@ -1406,22 +1588,22 @@ void LARNCGammaXSec::AmpNum(double t1, double t2, TensorOrder2& c_lh_both)
   }
   // real part is for neutrino, image part is for antineutrino
   if(fNCheck == 520){
-    if((Abs(Imaginary(c_lh)))     > TMath::Power(10., -6.) ||
-       (Abs(Imaginary(c_lh_anti)) > TMath::Power(10., -6.))){
+    if((TMath::Abs(c_lh.Re()))      > TMath::Power(10., -6.) ||
+       (TMath::Abs(c_lh_anti.Im())) > TMath::Power(10., -6.)){
       LOG("LARNCGammaXSec", pFATAL) << "The image part of c_lh or c_lh_anti is not zero";
       LOG("LARNCGammaXSec", pFATAL) << "c_lh      = ";
       LOG("LARNCGammaXSec", pFATAL) << "c_lh_anti = ";
       exit(1);
     }
   }
-
+  
   TComplex complexUnity(0,1);
-
-  c_lh_both = Real(c_lh) + complexUnity * Real(c_lh_anti);
+  
+  c_lh_both = c_lh.Re() + complexUnity * c_lh_anti.Re();
 
   if(fNCheck == 520){
-    if((Real(c_lh_both)) < 0. ||
-       (Imaginary(c_lh_both)) < 0.){
+    if(c_lh_both.Re() < 0. ||
+       c_lh_both.Im() < 0.){
       LOG("LARNCGammaXSec", pFATAL) << "the LH tensor is less than zero";
       LOG("LARNCGammaXSec", pFATAL) << "c_lh_both      = ";
       exit(1);
@@ -1430,7 +1612,7 @@ void LARNCGammaXSec::AmpNum(double t1, double t2, TensorOrder2& c_lh_both)
   return;
   
 }
-double LARNCGammaXSec::SMomentum(TensorOrder1& sp){
+double LARNCGammaXSec::SMomentum(const TensorOrder1& sp){
   
   double smomentum=0.;
 
@@ -1442,12 +1624,12 @@ double LARNCGammaXSec::SMomentum(TensorOrder1& sp){
 }
 
 
-double LARNCGammaXSec::Flam(double sx, double sy, double sz){
+double LARNCGammaXSec::Flam(const double sx, const double sy, const double sz){
   return sx*sx + sy*sy + sz*sz -2.*(sx*sy + sy*sz + sx*sz);
 }
 
 
-TensorOrder2* LARNCGammaXSec::Dim3to2(TensorOrder3& tensor, int n){
+TensorOrder2* LARNCGammaXSec::Dim3to2(const TensorOrder3& tensor, const int n){
 
   TensorOrder2* mat = new TensorOrder2();
   for(int i = 0; i < 4; i++)
@@ -1456,7 +1638,8 @@ TensorOrder2* LARNCGammaXSec::Dim3to2(TensorOrder3& tensor, int n){
   return mat;
 }
 
-TensorOrder2* LARNCGammaXSec::Dim4to2(TensorOrder4& tensor, int n1, int n2){
+TensorOrder2* LARNCGammaXSec::Dim4to2(const TensorOrder4& tensor,
+                                      const int n1, const int n2){
 
   TensorOrder2* mat = new TensorOrder2();
   for(int i = 0; i < 4; i++)
@@ -1466,17 +1649,17 @@ TensorOrder2* LARNCGammaXSec::Dim4to2(TensorOrder4& tensor, int n1, int n2){
 }
 
 
-TensorOrder2* LARNCGammaXSec::Mult3Matrices(TensorOrder2& mat1,
-                                            TensorOrder2& mat2,
-                                            TensorOrder2& mat3){
+TensorOrder2* LARNCGammaXSec::Mult3Matrices(const TensorOrder2& mat1,
+                                            const TensorOrder2& mat2,
+                                            const TensorOrder2& mat3){
   TensorOrder2* result;
   TensorOrder2* mult = MatMult(mat1, mat2);
   result = MatMult((*mult), mat3);
   return result;
 }
 
-TensorOrder2* LARNCGammaXSec::MatMult(TensorOrder2& mat1,
-                                      TensorOrder2& mat2){
+TensorOrder2* LARNCGammaXSec::MatMult(const TensorOrder2& mat1,
+                                      const TensorOrder2& mat2){
 
   if(mat1.GetOrderDim(1) != mat2.GetOrderDim(0))
     LOG("LARNCGammaXSec",kError)
@@ -1501,9 +1684,9 @@ TensorOrder2* LARNCGammaXSec::MatMult(TensorOrder2& mat1,
   
 }
 
-TComplex LARNCGammaXSec::Mult2(TensorOrder2& c_a, TensorOrder4& c_b,
-                               TensorOrder2& c_c, TensorOrder4& c_d,
-                               int n_alpha,int n_beta){
+TComplex LARNCGammaXSec::Mult2(const TensorOrder2& c_a, const TensorOrder4& c_b,
+                               const TensorOrder2& c_c, const TensorOrder4& c_d,
+                               const int n_alpha, const int n_beta){
   // use parameter
   // implicit real*8 (a,b,d-h,o-z)
   // implicit complex*16 (c)
@@ -1543,15 +1726,15 @@ TComplex LARNCGammaXSec::Mult2(TensorOrder2& c_a, TensorOrder4& c_b,
   return -ch/2.;
 }
 
-TensorOrder2* LARNCGammaXSec::Lambda(int ns, int nd, TensorOrder1& ppd){
+TensorOrder2* LARNCGammaXSec::Lambda(const int ns, const int nd, const TensorOrder1& ppd){
   //   use parameter
   // implicit real*8 (a,b,d-h,o-z)
   // implicit complex*16 (c)
   // complex*16,dimension(4,4) :: cppd,clam,cpmd,csbar
   // real*8,dimension(0:3) :: ppd
   
-  TensorOrder2* cppd =  DiracSlach(ppd);
-  TensorOrder2 cpmd = (*cppd)+xmd*unm;
+  TensorOrder2* cppd = SlashDirac(ppd);
+  TensorOrder2 cpmd = (*cppd)+fgMdelta*(*UnityOrder2());
   TensorOrder2 csbar;
   for(int i=0; i<4; i++){
     for(int j=0; j<4; j++){
@@ -1560,12 +1743,12 @@ TensorOrder2* LARNCGammaXSec::Lambda(int ns, int nd, TensorOrder1& ppd){
         csdij=csdij+DM[ns](i,k)*DM[nd](k,j);
       }
       
-      csbar(i,j) = metric(ns,nd)*unity2(i,j)-2./3.*ppd(ns)*ppd(nd)/xmd*xmd*unity2(i,j) 
-        +(ppd(ns)*DM[nd](i,j)-ppd(nd)*DM[ns](i,j))/(3.*xmd)
+      csbar(i,j) = metric(ns,nd)*(*UnityOrder2())(i,j)-2./3.*ppd(ns)*ppd(nd)/fgMdelta*fgMdelta*(*UnityOrder2())(i,j) 
+        +(ppd(ns)*DM[nd](i,j)-ppd(nd)*DM[ns](i,j))/(3.*fgMdelta)
         -csdij/3.;
     }
   }
-  TensorOrder2* = new TensorOrder2();
+  TensorOrder2* clam = new TensorOrder2();
   for(int i=0; i<4; i++){
     for(int j=0; j<4; j++){
       (*clam)(i,j)=0.;
@@ -1578,7 +1761,7 @@ TensorOrder2* LARNCGammaXSec::Lambda(int ns, int nd, TensorOrder1& ppd){
   
 }
 
-TComplex LARNCGammaXSec::Width(Resonance_t res, double sp2){
+TComplex LARNCGammaXSec::Width(const Resonance_t res, const double sp2){
   // use parameter
   // implicit real*8 (a,b,d-h,o-z)
   // implicit complex*16 (c)
@@ -1587,155 +1770,174 @@ TComplex LARNCGammaXSec::Width(Resonance_t res, double sp2){
   // ! xmsigma=0.475           ! For Sigma-> Pi Pi in S-wave
   // ! xmeta=0.548
 
-  TComplex wid;
+  TComplex wid, wd;
+  double smr;
+  double pwidnpi0, pwidnpi, pwiddpi0, pwiddnpi0, pwidns0, pwidspi0, pwiddpi, pwidns;
+  double pwiddpi2, pwiddpi00, pwiddpi20, pwidnr00, pwidnr20, pwidnr0, pwidnr2, pwidne0;
+  double pwidnspi0, pwidnspi, pwidrpi0, pwidne, pwidnr;
+  
   switch(res){
+
   case kNoResonance:
     wid=0.;
     break;
-  case kP33_1232:   
+
+  case kP33_1232:
     if((sp2 - (fgMnucl+fgMpi)*(fgMnucl+fgMpi)) > 0){
-      double slam = flam(sp2, fgMpi*fgMpi, fgMnSq);
+      double slam = Flam(sp2, fgMpi*fgMpi, fgMnSq);
       wd= 1. / (6.*TMath::Pi())*(fgFStar/fgMpi)*(fgFStar/fgMpi)*fgMnucl/(sp2*sp2) * TMath::Power(TMath::Sqrt(slam)/(2.),3.);
     }else{
       wd=0.;
     }
-    double smr=xmd;
-    double pwidnpi0 = 0.117;
-    pwidth1(sp2, smr,fgMnucl,fgMpi,1,pwidnpi0,pwidnpi);                           //decay mode N-Pi
+    smr=fgMdelta;
+
+    pwidnpi0 = 0.117;
+    pwidth1(sp2, smr, fgMnucl, fgMpi, 1, pwidnpi0, pwidnpi); //decay mode N-Pi
     wid=wd;
-    // P11(1440)
     break;
+
   case kP11_1440:
-    smr=xmp11;
+    smr=fgMP11;
     pwidnpi0=0.3*0.65;  
-    pwidth1(sp2,smr,fgMnucl,fgMpi,1,pwidnpi0,pwidnpi);//                           ! decay mode N-Pi
+    pwidth1(sp2,smr,fgMnucl,fgMpi,1,pwidnpi0,pwidnpi);//decay mode N-Pi
     pwiddpi0=0.3*0.2;
-    pwiddnpi0=0.117;//            ! the width of Delta 
-    pwidth2(sp2,smr,xmd,fgMpi,1,pwiddpi0,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi);//      ! decay mode Delta-pi
+    pwiddnpi0=0.117;// the width of Delta 
+    pwidth2(sp2,smr,fgMdelta,fgMpi,1,pwiddpi0,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi);// decay mode Delta-pi
     pwidns0=0.3*0.15;
-    pwidspi0=0.6;//               ! the width of Sigma->Pi Pi
-    pwidth2(sp2,smr,xmsigma,fgMnucl,0,pwidns0,fgMpi,fgMpi,0,pwidspi0,pwidns);//     ! decay mode N-Sigma
+    pwidspi0=0.6;// the width of Sigma->Pi Pi
+    pwidth2(sp2,smr,fgMSigma,fgMnucl,0,pwidns0,fgMpi,fgMpi,0,pwidspi0,pwidns);//decay mode N-Sigma
     
     wid= pwidnpi +pwiddpi + pwidns;
     break;
   case kD13_1520:   
-    smr=xmd13;        
+    smr=fgMD13;        
     pwidnpi0=0.115*0.6;
     pwidth1(sp2,smr,fgMnucl,fgMpi,2,pwidnpi0,pwidnpi);//                             ! n_pi
     pwiddpi00=0.115*0.15;
     pwiddpi20=0.115*0.125;     
     pwiddnpi0=0.117;
-    pwidth2(sp2,smr,xmd,fgMpi,0,pwiddpi00,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi0);//    ! decay mode Delta-pi L=0
-    pwidth2(sp2,smr,xmd,fgMpi,2,pwiddpi20,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi2);//    ! decay mode Delta-pi L=2
+    pwidth2(sp2,smr,fgMdelta,fgMpi,0,pwiddpi00,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi0);//    ! decay mode Delta-pi L=0
+    pwidth2(sp2,smr,fgMdelta,fgMpi,2,pwiddpi20,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi2);//    ! decay mode Delta-pi L=2
     pwidnr00=0.115*0.09;
     pwidnr20=0.115*0.035;
     pwidrpi0=0.1491;//      ! the width of Rho->pi pi P-wave 
-    pwidth2(sp2,smr,xmrho,fgMnucl,0,pwidnr00,fgMpi,fgMpi,1,pwidrpi0,pwidnr0);//       ! decay mode N-Rho L=0
-    pwidth2(sp2,smr,xmrho,fgMnucl,2,pwidnr20,fgMpi,fgMpi,1,pwidrpi0,pwidnr2);//       ! decay mode N-Rho L=2
+    pwidth2(sp2,smr,fgMRho,fgMnucl,0,pwidnr00,fgMpi,fgMpi,1,pwidrpi0,pwidnr0);//       ! decay mode N-Rho L=0
+    pwidth2(sp2,smr,fgMRho,fgMnucl,2,pwidnr20,fgMpi,fgMpi,1,pwidrpi0,pwidnr2);//       ! decay mode N-Rho L=2
 
     wid= pwidnpi + pwiddpi0 + pwiddpi2 + pwidnr0 + pwidnr2;
     break;
   case kS11_1535:
-    smr=xms11;
+    smr=fgMS11;
     pwidnpi0=0.15*0.45;
     pwidth1(sp2,smr,fgMnucl,fgMpi,0,pwidnpi0,pwidnpi);//                             ! N-Pi
     pwidne0=0.15*0.42;
-    pwidth1(sp2,smr,fgMnucl,xmeta,0,pwidne0,pwidne);//                              ! N-eta
+    pwidth1(sp2,smr,fgMnucl,fgMEta,0,pwidne0,pwidne);//                              ! N-eta
     pwidnspi0=0.15*0.08;
     pwidns0=0.;//   ! call the width of P11(1440)
-    pwidth2(sp2,smr,xmp11,fgMpi,0,pwidnspi0,fgMnucl,fgMpi,1,pwidns0,pwidnspi);//      ! N*(1440)-Pi   
+    pwidth2(sp2,smr,fgMP11,fgMpi,0,pwidnspi0,fgMnucl,fgMpi,1,pwidns0,pwidnspi);//      ! N*(1440)-Pi   
     pwiddpi0=0.15*0.01;
     pwiddnpi0=0.117;
-    pwidth2(sp2,smr,xmd,fgMpi,2,pwiddpi0,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi);//     ! Delta-Pi L=2
+    pwidth2(sp2,smr,fgMdelta,fgMpi,2,pwiddpi0,fgMnucl,fgMpi,1,pwiddnpi0,pwiddpi);//     ! Delta-Pi L=2
     pwidnr0=0.15*0.02;
     pwidrpi0=0.1491;
-    pwidth2(sp2,smr,xmrho,fgMnucl,0,pwidnr0,fgMpi,fgMpi,1,pwidrpi0,pwidnr);//       ! decay mode N-Rho L=2
+    pwidth2(sp2,smr,fgMRho,fgMnucl,0,pwidnr0,fgMpi,fgMpi,1,pwidrpi0,pwidnr);//       ! decay mode N-Rho L=2
     pwidns0=0.15*0.02;
     pwidspi0=0.6;//               ! the width of Sigma->Pi Pi
-    pwidth2(sp2,smr,xmsigma,fgMnucl,0,pwidns0,fgMpi,fgMpi,0,pwidspi0,pwidns);//     ! decay mode N-Sigma       
+    pwidth2(sp2,smr,fgMSigma,fgMnucl,0,pwidns0,fgMpi,fgMpi,0,pwidspi0,pwidns);//     ! decay mode N-Sigma       
     wid=pwidnpi + pwidne  + pwiddpi + pwidnspi + pwidnr + pwidns;
     break;
+  default:
+    LOG("LARNCGammaXSec", pFATAL) << "This resonance is not included!!";
   }
-
+  
   return wid;
 }   
 
-TComplex pwidth1(sp2, smr, sma, smb, l, pwid0){//   ! Both of the particle A and B are stable
+void LARNCGammaXSec::pwidth1(const double sp2, const double smr,
+                             const double sma, const double smb,
+                             const int l,
+                             const double pwid0,
+                             double& pwid){//   ! Both of the particle A and B are stable
   // implicit real*8 (a,b,d-h,o-z)
   // implicit complex*16 (c)
   // real*8,external :: pcm       
-
+  
   if(sp2 < (sma+smb)*(sma+smb)){
-    pwid=0.0;
+    pwid = 0.;
   }else{
-    sw=TMath::Sqrt(sp2);
-    wpcm=pcm(sw,sma,smb);
-    rpcm=pcm(smr,sma,smb);
-    rho=wpcm**(2*l+1)/sw;
-    rho0=rpcm**(2*l+1)/smr;
-    pwid=pwid0*rho/rho0;
+    double sw=TMath::Sqrt(sp2);
+    double wpcm = pcm(sw,sma,smb);
+    double rpcm = pcm(smr,sma,smb);
+    double rho  = TMath::Power(wpcm,2*l+1)/sw;
+    double rho0 = TMath::Power(rpcm,2*l+1)/smr;
+    pwid = pwid0 * rho / rho0;
   }
-  return pwid;
+
 }
 
-TComplex pwidth2(sp2,smr,sma,smb,l,pwid1,smc,smd,l2,pwid2)//   ! Both of the particle A and B are stable
+void LARNCGammaXSec::pwidth2(const double sp2, const double smr, const double sma,
+                             const double smb, const int l,      const double pwid1,
+                             const double smc, const double smd, const int l2,
+                             const double pwid2,
+                             double& pwid){//   ! Both of the particle A and B are stable
   // implicit real*8 (a,b,d-h,o-z)
   // implicit complex*16 (c)
   // real*8,external :: pcm   
   
   if(sp2 < (smc+smd+smb)*(smc+smd+smb)){
-    pwid=0.;
+    pwid = 0.;
   }else{
-    sw=TMath::Sqrt(sp2);
-    rho_width(sw,sma,smb,l,smc,smd,l2,pwid2,rho);
-    rho_width(smr,sma,smb,l,smc,smd,l2,pwid2,rho0);
-    pwid=pwid1*rho/rho0 ;
-  }
-return pwid;
+    double sw   = TMath::Sqrt(sp2);
+    double rho  = rho_width(sw,sma,smb,l,smc,smd,l2,pwid2);
+    double rho0 = rho_width(smr,sma,smb,l,smc,smd,l2,pwid2);
+    pwid = pwid1*rho/rho0;
+  }  
 }
 
-       SUBROUTINE rho_width(sw,sma,smb,l,smc,smd,l2,pwid2,rho)  
-  implicit real*8 (a,b,d-h,o-z)
-  implicit complex*16 (c)
-  real*8,dimension(200) :: x,f1
-  real*8,external :: pcm   
-  pi=acos(-1.d0)  
+double LARNCGammaXSec::rho_width(const double sw,
+                                 const double sma, const double smb, const int l,
+                                 const double smc, const double smd, const int l2,
+                                 const double pwid2)  {
+         
+  double pmin=0.;
+  double pmax=pcm(sw,smc+smd,smb);
+  unsigned int n=1;
+  unsigned int np;
+  double *w;
+  double* x = new double[20];
+  std::complex<double>* f1 = new std::complex<double>[20];
+  np=20*n;
+  alvarezruso::integrationtools::SG20R(pmin, pmax, n, -20, x, np,w);
 
-  pmin=0.d0
-  pmax=pcm(sw,smc+smd,smb)
-  n=1
-  np=20*n
-  call DSG20r(pmin,pmax,n,x,np)
-  do i=1,np
-     f1(i)=fkernel_rho(x(i))
-     ! print *,f1(i)
-  end do
-  ! stop
-  call DRG20r(pmin,pmax,n,f1,rho)
+  for(unsigned int i = 0; i < np; i++){
+    f1[i]=(std::complex<double>)fkernel_rho(x[i], sw, sma, smb, l, smc, smd, l2, pwid2);
+  }
+  double rho = alvarezruso::integrationtools::RG201D(pmin,pmax,n,-20, f1).real();
+  
+  delete x;
+  delete f1;
+  return rho;
+}
 
-contains
+double LARNCGammaXSec::fkernel_rho(const double pab, const double sw,
+                                   const double sma, const double smb, const int l,
+                                   const double smc, const double smd, const int l2,
+                                   const double pwid2){
+    // implicit real*8 (a,b,d-h,o-z)
+    // implicit complex*16 (c)
+    // ! real*8,dimension(4,5) :: swidd
+  double swa=TMath::Sqrt(sw*sw+smb*smb-2.*sw*TMath::Sqrt(pab*pab+smb*smb));
+  double pwida;
+  if(TMath::Abs(sma-1.44) > 0.00001){
+    pwidth1(swa*swa,sma,smc,smd,l2,pwid2,pwida);
+    // ! print *,swa,sma,smc,smd,l2,pwid2,pwida
+    // ! stop
+  }else{
+    pwida= Width(kP11_1440,swa*swa);
+  }
+  return 2.*TMath::Pi()*TMath::Power(pab,2*l+2) / TMath::Sqrt(pab*pab+smb*smb)*sma*pwida / (TMath::Power(swa*swa-sma*sma,2) + sma*sma*pwida*pwida);
+}
 
-  FUNCTION fkernel_rho(pab)
-    implicit real*8 (a,b,d-h,o-z)
-    implicit complex*16 (c)
-    ! real*8,dimension(4,5) :: swidd
-    swa=sqrt(sw**2+smb**2-2.d0*sw*sqrt(pab**2+smb**2) ) 
-    if(abs(sma-1.44).gt.1d-5) then
-       call pwidth1(swa**2,sma,smc,smd,l2,pwid2,pwida)
-       ! print *,swa,sma,smc,smd,l2,pwid2,pwida
-       ! stop
-    else 
-       call width(2,swa**2,pwida) 
-    endif
-
-    fkernel_rho=2.d0/pi*pab**(2*l+2)/sqrt(pab**2+smb**2)*sma*pwida  &
-         /( (swa**2-sma**2)**2 + sma**2*pwida**2 ) 
-    !    print*,xwa,sma,xmc,xmdd,l2,pwid2,pwida,fkernel_rho,pab
-    !    stop
-    return
-  end function fkernel_rho
-
-END SUBROUTINE rho_width
 //____________________________________________________________________________
 /*
 // This in theory should be useless
