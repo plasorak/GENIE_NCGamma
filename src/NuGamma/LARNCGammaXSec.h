@@ -63,10 +63,10 @@ namespace genie {
                   const double theta_qf, const double phi_qf,   const double xp0,
                   const double theta_p,  const double phi_p,
                   double&      t1,       double&      t2);
-    void fgaus(const int N, int* JS, double* X,
-               void (*)(const int J, double& DN, double& UP),
-               std::complex<double> (*)(const int n, double* x),
-               std::complex<double>& S);
+    void fgaus(const int N, int *JS, double* X,
+               void (*)(const int J, double& DN, double& UP));
+    //           std::complex<double> (*)(const int n, double* x),
+    //           std::complex<double>& S);
     void FS(const int J, double& DN, double& UP);
     std::complex<double> ckernel(const int n, double* x);
   

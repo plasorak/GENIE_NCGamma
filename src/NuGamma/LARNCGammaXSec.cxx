@@ -79,10 +79,10 @@ double LARNCGammaXSec::DiffXSec(const Interaction * interaction)
 }
 
 void LARNCGammaXSec::fgaus(const int n, int* JS, double* x,
-                           void (*limit)(const int j, double& DN, double& UP),
-                           std::complex<double> (*integrand)(const int n, double* x),
-                           std::complex<double>&S){
-
+                           void (*limit)(const int j, double& DN, double& UP)){
+  // std::complex<double> (*integrand)(const int n, double* x);
+  std::complex<double> S;
+  
   double T[5] = { -0.9061798459, -0.5384693101, 0.0,          0.5384693101, 0.9061798459};
   double C[5] = {  0.2369268851,  0.4786286705, 0.5688888889, 0.4786286705, 0.2369268851};
   int m = 1;
@@ -110,7 +110,7 @@ void LARNCGammaXSec::fgaus(const int n, int* JS, double* x,
     while(j == n){
       int k = IS[j][1];
       if(j == n){
-        p = integrand(n,x);
+        //p = integrand(n,x);
       }else{
         p = 1.0;
       }
@@ -165,8 +165,7 @@ void LARNCGammaXSec::dxsec(const double Enu, const double W, const double Qsq,
 //*********************Four integration**************************
 void LARNCGammaXSec::dcross2(const int n,
                              std::complex<double>& cdc){
-  int* js;
-  js = new int[n];
+  int* js = new int[n];
 
   for(int i = 0; i < n; ++i){
     js[i] = nprecise;
@@ -176,12 +175,12 @@ void LARNCGammaXSec::dcross2(const int n,
   //   JS(3)=8       // xqf0 
   //   JS(4)=8       // xqf0 
   std::complex<double> cs;
-  double* x;
-  x= new double[n];
-  
-  fgaus(n, js, x, &LARNCGammaXSec::FS, &LARNCGammaXSec::ckernel, cs);
+  double* x= new double[n];
+  int bla = n;
+  fgaus(bla, js, x, &LARNCGammaXSec::FS);//, &genie::LARNCGammaXSec::ckernel, cs);
   cdc = cs;
   delete x;
+  delete js;
 }
 
 //*****************************************************
