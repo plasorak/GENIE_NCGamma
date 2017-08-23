@@ -26,6 +26,8 @@
 #include "BaryonResonance/BaryonResonance.h"
 #include "AlvarezRuso/IntegrationTools.h"
 
+#include "TF2.h"
+
 using namespace genie;
 using namespace genie::constants;
 using namespace genie::utils;
@@ -51,19 +53,23 @@ double LARNCGammaXSec::DiffXSec(const Interaction * interaction)
     << "*** Calculating the cross section";
 
   InitialState* initialstate =  interaction->InitStatePtr();
-
-  W =        interaction->KinePtr()->GetKV(kKVW);
-  Q2 =       interaction->KinePtr()->GetKV(kKVQ2);
-  EGamma =   interaction->KinePtr()->GetKV(kKVEGamma);
-  PhiGamma = interaction->KinePtr()->GetKV(kKVPhiGamma);
+  Kinematics* kine = interaction->KinePtr();  
+  
+  double W =        interaction->KinePtr()->GetKV(kKVW);
+  double Q2 =       interaction->KinePtr()->GetKV(kKVQ2);
+  //double EGamma =   interaction->KinePtr()->GetKV(kKVEGamma);
+  //double PhiGamma = interaction->KinePtr()->GetKV(kKVPhiGamma);
   LOG("LARNCGammaXSec", pWARN)  << "W        " << W;
   LOG("LARNCGammaXSec", pWARN)  << "Q2       " << Q2;
-  LOG("LARNCGammaXSec", pWARN)  << "EGamma   " << EGamma;
-  LOG("LARNCGammaXSec", pWARN)  << "PhiGamma " << PhiGamma;
+  //LOG("LARNCGammaXSec", pWARN)  << "EGamma   " << EGamma;
+  //LOG("LARNCGammaXSec", pWARN)  << "PhiGamma " << PhiGamma;
+  //TF2 function("(TMath::Gauss(y,1.232,200)+TMath::Gauss(y,1.5,500))/(1+x/1.)^2");
+ 
+  //return function.Eval(Q2,W);
   
-  
-  gNeutrinoInit = (TLorentzVector*)initialstate->GetProbeP4()->Clone();
-  gTargetInit   = (TLorentzVector*)initialstate->GetTgtP4()->Clone();
+  //gNeutrinoInit = (TLorentzVector*)initialstate->GetProbeP4()->Clone();
+  //gTargetInit   = (TLorentzVector*)initialstate->GetTgtP4()->Clone();
+ 
 
   const int    nupdg = initialstate->ProbePdg();
   const double Enu   = initialstate->ProbeE(kRfHitNucRest);
